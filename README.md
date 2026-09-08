@@ -15,7 +15,7 @@ Panel de control (Next.js + Prisma) para dar seguimiento a los proyectos priorit
 
 ```bash
 npm install
-cp .env.example .env.local   # completa DATABASE_URL con tu conexión Postgres
+cp .env.example .env.local   # completa DATABASE_URL, APP_PASSWORD y AUTH_SECRET
 npm run db:push              # crea las tablas a partir de prisma/schema.prisma
 npm run dev
 ```
@@ -25,10 +25,15 @@ Abre http://localhost:3000.
 ## Despliegue en Vercel
 
 1. Conecta este repositorio a un proyecto de Vercel.
-2. En la configuración del proyecto, agrega la variable de entorno `DATABASE_URL` con tu conexión Postgres.
+2. En la configuración del proyecto, agrega las variables de entorno:
+   - `DATABASE_URL` — tu conexión Postgres.
+   - `APP_PASSWORD` — la contraseña para entrar al panel.
+   - `AUTH_SECRET` — un secreto aleatorio para firmar la sesión (ej. `openssl rand -hex 32`).
 3. Corre `npm run db:migrate` (o `db:push` en desarrollo) para aplicar el esquema a la base de datos de producción.
 
 Mientras `DATABASE_URL` no esté configurada, cada sección del panel muestra un aviso indicando cómo activarla; el resto del sitio funciona con normalidad.
+
+Mientras `APP_PASSWORD`/`AUTH_SECRET` no estén configuradas, el panel queda **sin protección de acceso** (público). Se recomienda configurarlas antes de compartir el link de producción.
 
 ## Estructura
 
