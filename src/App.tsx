@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { DbProvider, useDb } from './context/DbContext';
@@ -14,6 +14,46 @@ import { CommitteesAndTermsModule } from './components/CommitteesAndTermsModule'
 import { TeaRecord, TeaRecordInput } from './types';
 import { runIntegrityAudit } from './utils/integrityAgent';
 import { getInactiveRecords } from './utils/inactivityHelper';
+import { getCriticalAlerts } from './utils/criticalAlerts';
+import { getNotificationPermission, hasBeenNotified, markNotified, registerServiceWorker, showLocalNotification } from './utils/notifications';
+
+const CRITICAL_ALERT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Muestra notificaciones locales (vía el service worker) para alertas críticas nuevas. */
+function useCriticalAlertNotifications(records: TeaRecord[], onOpenCase: (record: TeaRecord) => void) {
+  useEffect(() => {
+    // Registra el service worker de una vez si el permiso ya fue concedido en una
+    // sesión anterior, para que esté listo antes del primer chequeo.
+    if (getNotificationPermission() === 'granted') registerServiceWorker();
+  }, []);
+
+  useEffect(() => {
+    const check = () => {
+      if (getNotificationPermission() !== 'granted') return;
+      const alerts = getCriticalAlerts(records).filter((a) => !hasBeenNotified(a.id));
+      if (alerts.length === 0) return;
+      alerts.forEach((a) => showLocalNotification(a.title, { body: a.body, critical: true, tag: a.id, recordId: a.recordId }));
+      markNotified(alerts.map((a) => a.id));
+    };
+
+    check();
+    const interval = setInterval(check, CRITICAL_ALERT_CHECK_INTERVAL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [records]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'tea-open-record' && event.data.recordId) {
+        const record = records.find((r) => r.id === event.data.recordId);
+        if (record) onOpenCase(record);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, [records, onOpenCase]);
+}
 
 const AppShell: React.FC = () => {
   const { t } = useLanguage();
@@ -26,6 +66,8 @@ const AppShell: React.FC = () => {
 
   const alertCount = useMemo(() => runIntegrityAudit(records).length, [records]);
   const inactiveCount = useMemo(() => getInactiveRecords(records).length, [records]);
+
+  useCriticalAlertNotifications(records, (r) => setViewTarget(r));
 
   const handleSave = (input: TeaRecordInput) => {
     if (formTarget && formTarget !== 'new') {
