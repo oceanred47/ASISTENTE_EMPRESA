@@ -1,0 +1,69 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --- ViVoConnect: ecosistema de automatización ---
+model AutomationFlow {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  tool        String? // ej. "n8n"
+  status      FlowStatus @default(PLANNED)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum FlowStatus {
+  PLANNED
+  IN_PROGRESS
+  LIVE
+  PAUSED
+}
+
+// --- Vivienda modular: cotizaciones y decisiones ---
+model Quote {
+  id          String   @id @default(cuid())
+  vendor      String
+  concept     String
+  amount      Float?
+  status      QuoteStatus @default(REQUESTED)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum QuoteStatus {
+  REQUESTED
+  RECEIVED
+  APPROVED
+  REJECTED
+}
+
+model LogisticsDecision {
+  id          String   @id @default(cuid())
+  title       String
+  rationale   String?
+  decidedBy   String?
+  createdAt   DateTime @default(now())
+}
+
+// --- Vigilancia tecnológica ---
+model WatchEntry {
+  id          String   @id @default(cuid())
+  category    WatchCategory
+  topic       String
+  source      String?
+  relevance   String?
+  createdAt   DateTime @default(now())
+}
+
+enum WatchCategory {
+  CIBERSEGURIDAD
+  AUTOMATIZACION
+  TECNOLOGIA_EMERGENTE
+}
