@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import "./globals.css";
+import { authConfigured, sessionCookieName, verifySessionToken } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Asistente Empresa",
@@ -14,7 +16,13 @@ const NAV_ITEMS = [
   { href: "/vigilancia", label: "Vigilancia Tecnológica" },
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  let showLogout = false;
+  if (authConfigured()) {
+    const cookieStore = await cookies();
+    showLogout = await verifySessionToken(cookieStore.get(sessionCookieName)?.value);
+  }
+
   return (
     <html lang="es">
       <body>
@@ -23,12 +31,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="text-lg font-semibold text-brand">
               Asistente Empresa
             </Link>
-            <nav className="flex gap-4 text-sm font-medium text-slate-600">
+            <nav className="flex items-center gap-4 text-sm font-medium text-slate-600">
               {NAV_ITEMS.map((item) => (
                 <Link key={item.href} href={item.href} className="hover:text-brand">
                   {item.label}
                 </Link>
               ))}
+              {showLogout && (
+                <form action="/logout" method="post">
+                  <button type="submit" className="hover:text-brand">
+                    Cerrar sesión
+                  </button>
+                </form>
+              )}
             </nav>
           </div>
         </header>
