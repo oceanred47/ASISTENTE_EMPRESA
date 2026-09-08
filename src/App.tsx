@@ -3,7 +3,9 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { DbProvider, useDb } from './context/DbContext';
 import { RoleProvider, useRole } from './context/RoleContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar, TabKey } from './components/Navbar';
+import { LoginScreen } from './components/LoginScreen';
 import { CaseList } from './components/CaseList';
 import { CaseFormModal } from './components/CaseFormModal';
 import { CaseDetailModal } from './components/CaseDetailModal';
@@ -57,8 +59,8 @@ function useCriticalAlertNotifications(records: TeaRecord[], onOpenCase: (record
 
 const AppShell: React.FC = () => {
   const { t } = useLanguage();
-  const { userName, role } = useRole();
-  const { records, addRecord, updateRecord, deleteRecord, addHistoryNote } = useDb();
+  const { userName, role, profileLoading } = useRole();
+  const { records, addRecord, updateRecord, deleteRecord, addHistoryNote, loading: dbLoading } = useDb();
 
   const [activeTab, setActiveTab] = useState<TabKey>('records');
   const [formTarget, setFormTarget] = useState<TeaRecord | 'new' | null>(null);
@@ -86,6 +88,14 @@ const AppShell: React.FC = () => {
   };
 
   const viewedRecord = viewTarget ? records.find((r) => r.id === viewTarget.id) ?? null : null;
+
+  if (dbLoading || profileLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">
+        Cargando datos…
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -138,14 +148,31 @@ const AppShell: React.FC = () => {
   );
 };
 
+const AuthGate: React.FC = () => {
+  const { isFirebaseConfigured, user, loading } = useAuth();
+
+  if (isFirebaseConfigured && loading) {
+    return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Cargando…</div>;
+  }
+  if (isFirebaseConfigured && !user) {
+    return <LoginScreen />;
+  }
+
+  return (
+    <RoleProvider>
+      <DbProvider>
+        <AppShell />
+      </DbProvider>
+    </RoleProvider>
+  );
+};
+
 const App: React.FC = () => (
   <LanguageProvider>
     <ThemeProvider>
-      <RoleProvider>
-        <DbProvider>
-          <AppShell />
-        </DbProvider>
-      </RoleProvider>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
     </ThemeProvider>
   </LanguageProvider>
 );

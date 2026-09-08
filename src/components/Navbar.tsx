@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useRole } from '../context/RoleContext';
+import { useAuth } from '../context/AuthContext';
 import { ROLES, TeaRecord } from '../types';
 import { NotificationCenter } from './NotificationCenter';
+import { UserManagementModal } from './UserManagementModal';
 
 export type TabKey = 'records' | 'analytics' | 'agent' | 'importExport' | 'committees';
 
@@ -19,7 +21,9 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, alertCount, inactiveCount, records, onOpenCase }) => {
   const { t, lang, toggleLang } = useLanguage();
   const { theme, toggleTheme } = useTheme();
-  const { role, setRole } = useRole();
+  const { role, setRole, canSelfSelectRole, userName } = useRole();
+  const { isFirebaseConfigured, user, signOutUser } = useAuth();
+  const [showUserManagement, setShowUserManagement] = useState(false);
 
   const tabs: { key: TabKey; label: string; badge?: number }[] = [
     { key: 'records', label: t('nav_records'), badge: inactiveCount },
@@ -38,18 +42,32 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, alertCou
             <p className="text-xs sm:text-sm text-blue-200 leading-snug">{t('appSubtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as typeof role)}
-              className="px-2 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm font-semibold transition border-none focus:outline-none focus:ring-2 focus:ring-white/40"
-              aria-label="rol activo"
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r} className="text-slate-900">
-                  {r}
-                </option>
-              ))}
-            </select>
+            {canSelfSelectRole ? (
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as typeof role)}
+                className="px-2 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm font-semibold transition border-none focus:outline-none focus:ring-2 focus:ring-white/40"
+                aria-label="rol activo"
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r} className="text-slate-900">
+                    {r}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="px-2 py-1.5 rounded-md bg-white/10 text-sm font-semibold" title={userName}>
+                {role}
+              </span>
+            )}
+            {isFirebaseConfigured && role === 'Administrador' && (
+              <button
+                onClick={() => setShowUserManagement(true)}
+                className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm font-semibold transition"
+              >
+                Usuarios
+              </button>
+            )}
             <NotificationCenter records={records} onOpenCase={onOpenCase} />
             <button
               onClick={toggleLang}
@@ -65,6 +83,15 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, alertCou
             >
               {theme === 'light' ? t('theme_dark') : t('theme_light')}
             </button>
+            {isFirebaseConfigured && user && (
+              <button
+                onClick={() => signOutUser()}
+                className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm font-semibold transition"
+                title={user.email ?? undefined}
+              >
+                Salir
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -90,6 +117,8 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, alertCou
           ))}
         </div>
       </nav>
+
+      {showUserManagement && <UserManagementModal onClose={() => setShowUserManagement(false)} />}
     </header>
   );
 };

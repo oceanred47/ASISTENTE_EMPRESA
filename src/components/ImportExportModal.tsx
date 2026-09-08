@@ -49,7 +49,7 @@ function recordsToCsv(records: TeaRecord[]): string {
 export const ImportExportModal: React.FC = () => {
   const { t } = useLanguage();
   const { permissions } = useRole();
-  const { records, importRecords, resetData } = useDb();
+  const { records, importRecords, resetData, canResetData } = useDb();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -123,7 +123,7 @@ export const ImportExportModal: React.FC = () => {
         <h3 className="font-semibold text-rose-700 dark:text-rose-400">Zona de Riesgo</h3>
         <p className="text-sm text-slate-500">Restablece la base de datos a los expedientes de ejemplo iniciales. Esta acción no se puede deshacer.</p>
         <button
-          disabled={!permissions.reiniciarBaseDatos}
+          disabled={!permissions.reiniciarBaseDatos || !canResetData}
           onClick={() => {
             if (confirm('¿Confirma que desea restablecer la base de datos a sus datos de ejemplo iniciales?')) {
               resetData();
@@ -132,7 +132,8 @@ export const ImportExportModal: React.FC = () => {
           }}
           className="px-3 py-2 rounded-md border border-rose-400 text-rose-700 dark:text-rose-400 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Restablecer Base de Datos{!permissions.reiniciarBaseDatos && ' (solo Administrador)'}
+          Restablecer Base de Datos
+          {!canResetData ? ' (deshabilitado: base de datos en producción)' : !permissions.reiniciarBaseDatos ? ' (solo Administrador)' : ''}
         </button>
       </div>
     </div>

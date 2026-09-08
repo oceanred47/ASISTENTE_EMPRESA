@@ -1,9 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { TeaRecord, TeaRecordInput, RecordHistoryEntry } from '../types';
 import { initialData } from '../data/initialData';
 import { generateId } from '../utils/teaHelpers';
+import { db, isFirebaseConfigured } from '../lib/firebase';
 
 const STORAGE_KEY = 'tea_records_db_v1';
+const COLLECTION_NAME = 'tea_records';
 
 function loadFromStorage(): TeaRecord[] {
   try {
@@ -61,6 +64,7 @@ function sanitizeRecord(input: Partial<TeaRecord>): TeaRecord {
 
 interface DbContextValue {
   records: TeaRecord[];
+  loading: boolean;
   addRecord: (input: TeaRecordInput, author: string, role: string) => TeaRecord;
   updateRecord: (id: string, patch: Partial<TeaRecordInput>, author: string, role: string, changeSummary?: string) => void;
   deleteRecord: (id: string) => void;
@@ -68,123 +72,169 @@ interface DbContextValue {
   applyAutoFix: (id: string, patch: Partial<TeaRecordInput>, note: string) => void;
   importRecords: (records: TeaRecord[]) => void;
   resetData: () => void;
+  /** false cuando la base de datos vive en Firestore: restablecer a datos de ejemplo borraría casos reales. */
+  canResetData: boolean;
 }
 
 const DbContext = createContext<DbContextValue | undefined>(undefined);
 
 export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [records, setRecords] = useState<TeaRecord[]>(() => loadFromStorage());
+  const [records, setRecords] = useState<TeaRecord[]>(() => (isFirebaseConfigured ? [] : loadFromStorage()));
+  const [loading, setLoading] = useState(isFirebaseConfigured);
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
 
+  // Modo local: persiste en localStorage en cada cambio.
   useEffect(() => {
+    if (isFirebaseConfigured) return;
     saveToStorage(records);
   }, [records]);
 
-  const addRecord = useCallback((input: TeaRecordInput, author: string, role: string): TeaRecord => {
-    const nowIso = new Date().toISOString();
-    const historyEntry: RecordHistoryEntry = {
-      id: generateId(),
-      date: nowIso,
-      author,
-      role,
-      title: 'Expediente creado',
-      details: `Registro ${input.numeroRegistro} creado en el sistema.`,
-    };
-    const record = sanitizeRecord({
-      ...input,
-      id: generateId(),
-      createdAt: nowIso,
-      updatedAt: nowIso,
-      history: [historyEntry],
-    });
-    setRecords((prev) => [record, ...prev]);
-    return record;
+  // Modo Firebase: se suscribe en tiempo real a la colección de expedientes.
+  useEffect(() => {
+    if (!isFirebaseConfigured || !db) return;
+    const unsubscribe = onSnapshot(
+      collection(db, COLLECTION_NAME),
+      (snap) => {
+        setRecords(snap.docs.map((d) => sanitizeRecord({ id: d.id, ...d.data() } as Partial<TeaRecord>)));
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error al sincronizar con Firestore:', err);
+        setLoading(false);
+      },
+    );
+    return unsubscribe;
   }, []);
+
+  /** Persiste un expediente completo: Firestore (fuente de verdad compartida) o estado local. */
+  const persist = useCallback((record: TeaRecord) => {
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, COLLECTION_NAME, record.id), record).catch((err) => console.error('No se pudo guardar el expediente:', err));
+    } else {
+      setRecords((prev) => {
+        const exists = prev.some((r) => r.id === record.id);
+        return exists ? prev.map((r) => (r.id === record.id ? record : r)) : [record, ...prev];
+      });
+    }
+  }, []);
+
+  const addRecord = useCallback(
+    (input: TeaRecordInput, author: string, role: string): TeaRecord => {
+      const nowIso = new Date().toISOString();
+      const historyEntry: RecordHistoryEntry = {
+        id: generateId(),
+        date: nowIso,
+        author,
+        role,
+        title: 'Expediente creado',
+        details: `Registro ${input.numeroRegistro} creado en el sistema.`,
+      };
+      const record = sanitizeRecord({
+        ...input,
+        id: generateId(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        history: [historyEntry],
+      });
+      persist(record);
+      return record;
+    },
+    [persist],
+  );
 
   const updateRecord = useCallback(
     (id: string, patch: Partial<TeaRecordInput>, author: string, role: string, changeSummary?: string) => {
-      setRecords((prev) =>
-        prev.map((r) => {
-          if (r.id !== id) return r;
-          const nowIso = new Date().toISOString();
-          const historyEntry: RecordHistoryEntry = {
-            id: generateId(),
-            date: nowIso,
-            author,
-            role,
-            title: 'Expediente actualizado',
-            details: changeSummary ?? 'Se actualizaron datos del expediente.',
-            fields: Object.keys(patch),
-          };
-          return sanitizeRecord({
-            ...r,
-            ...patch,
-            updatedAt: nowIso,
-            history: [...r.history, historyEntry],
-          });
-        }),
-      );
+      const current = recordsRef.current.find((r) => r.id === id);
+      if (!current) return;
+      const nowIso = new Date().toISOString();
+      const historyEntry: RecordHistoryEntry = {
+        id: generateId(),
+        date: nowIso,
+        author,
+        role,
+        title: 'Expediente actualizado',
+        details: changeSummary ?? 'Se actualizaron datos del expediente.',
+        fields: Object.keys(patch),
+      };
+      const updated = sanitizeRecord({ ...current, ...patch, updatedAt: nowIso, history: [...current.history, historyEntry] });
+      persist(updated);
     },
-    [],
+    [persist],
   );
 
   const deleteRecord = useCallback((id: string) => {
-    setRecords((prev) => prev.filter((r) => r.id !== id));
+    if (isFirebaseConfigured && db) {
+      deleteDoc(doc(db, COLLECTION_NAME, id)).catch((err) => console.error('No se pudo eliminar el expediente:', err));
+    } else {
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+    }
   }, []);
 
-  const addHistoryNote = useCallback((id: string, note: string, author: string, role: string) => {
-    setRecords((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        const nowIso = new Date().toISOString();
-        const entry: RecordHistoryEntry = {
-          id: generateId(),
-          date: nowIso,
-          author,
-          role,
-          title: 'Nota de seguimiento',
-          details: note,
-        };
-        return { ...r, updatedAt: nowIso, history: [...r.history, entry] };
-      }),
-    );
-  }, []);
+  const addHistoryNote = useCallback(
+    (id: string, note: string, author: string, role: string) => {
+      const current = recordsRef.current.find((r) => r.id === id);
+      if (!current) return;
+      const nowIso = new Date().toISOString();
+      const entry: RecordHistoryEntry = { id: generateId(), date: nowIso, author, role, title: 'Nota de seguimiento', details: note };
+      persist({ ...current, updatedAt: nowIso, history: [...current.history, entry] });
+    },
+    [persist],
+  );
 
-  const applyAutoFix = useCallback((id: string, patch: Partial<TeaRecordInput>, note: string) => {
-    setRecords((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        const nowIso = new Date().toISOString();
-        const entry: RecordHistoryEntry = {
-          id: generateId(),
-          date: nowIso,
-          author: 'Agente de Base de Datos',
-          role: 'Sistema (IA)',
-          title: 'Corrección automática de integridad',
-          details: note,
-          fields: Object.keys(patch),
-        };
-        return sanitizeRecord({ ...r, ...patch, updatedAt: nowIso, history: [...r.history, entry] });
-      }),
-    );
-  }, []);
+  const applyAutoFix = useCallback(
+    (id: string, patch: Partial<TeaRecordInput>, note: string) => {
+      const current = recordsRef.current.find((r) => r.id === id);
+      if (!current) return;
+      const nowIso = new Date().toISOString();
+      const entry: RecordHistoryEntry = {
+        id: generateId(),
+        date: nowIso,
+        author: 'Agente de Base de Datos',
+        role: 'Sistema (IA)',
+        title: 'Corrección automática de integridad',
+        details: note,
+        fields: Object.keys(patch),
+      };
+      persist(sanitizeRecord({ ...current, ...patch, updatedAt: nowIso, history: [...current.history, entry] }));
+    },
+    [persist],
+  );
 
   const importRecords = useCallback((incoming: TeaRecord[]) => {
-    setRecords((prev) => {
-      const byId = new Map(prev.map((r) => [r.id, r]));
-      incoming.forEach((rec) => {
-        byId.set(rec.id || generateId(), sanitizeRecord(rec));
+    const sanitized = incoming.map((rec) => sanitizeRecord({ ...rec, id: rec.id || generateId() }));
+    if (isFirebaseConfigured && db) {
+      Promise.all(sanitized.map((rec) => setDoc(doc(db!, COLLECTION_NAME, rec.id), rec))).catch((err) =>
+        console.error('No se pudieron importar algunos expedientes:', err),
+      );
+    } else {
+      setRecords((prev) => {
+        const byId = new Map(prev.map((r) => [r.id, r]));
+        sanitized.forEach((rec) => byId.set(rec.id, rec));
+        return Array.from(byId.values());
       });
-      return Array.from(byId.values());
-    });
+    }
   }, []);
 
   const resetData = useCallback(() => {
+    if (isFirebaseConfigured) return; // deshabilitado en producción: ver canResetData
     setRecords(initialData);
   }, []);
 
   const value = useMemo(
-    () => ({ records, addRecord, updateRecord, deleteRecord, addHistoryNote, applyAutoFix, importRecords, resetData }),
-    [records, addRecord, updateRecord, deleteRecord, addHistoryNote, applyAutoFix, importRecords, resetData],
+    () => ({
+      records,
+      loading,
+      addRecord,
+      updateRecord,
+      deleteRecord,
+      addHistoryNote,
+      applyAutoFix,
+      importRecords,
+      resetData,
+      canResetData: !isFirebaseConfigured,
+    }),
+    [records, loading, addRecord, updateRecord, deleteRecord, addHistoryNote, applyAutoFix, importRecords, resetData],
   );
 
   return <DbContext.Provider value={value}>{children}</DbContext.Provider>;
