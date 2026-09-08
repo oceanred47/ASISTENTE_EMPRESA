@@ -60,6 +60,16 @@ export const CaseDetailModal: React.FC<CaseDetailModalProps> = ({ record, onClos
         </div>
 
         <div id="print-area" className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+          <div className="hidden print:block border-b-2 border-slate-800 pb-3 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wide">Gobierno de Puerto Rico · Departamento de la Familia</p>
+            <h1 className="text-lg font-bold">Registro de Coordinación Interinstitucional de Servicios TEA</h1>
+            <p className="text-xs">Ley Núm. 163 del 13 de agosto de 2024</p>
+            <div className="flex justify-between text-sm mt-2">
+              <span className="font-semibold">{record.numeroRegistro}</span>
+              <span>{record.nombreParticipante}</span>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
             <div>
               <h3 className="text-xs font-bold uppercase text-blue-700 dark:text-blue-400 mb-1">{t('form_sectionI')}</h3>
@@ -129,7 +139,7 @@ export const CaseDetailModal: React.FC<CaseDetailModalProps> = ({ record, onClos
             </div>
           )}
 
-          <div className="no-print">
+          <div>
             <h3 className="text-xs font-bold uppercase text-blue-700 dark:text-blue-400 mb-2">{t('history_title')}</h3>
             <div className="space-y-3 border-l-2 border-slate-200 dark:border-slate-700 pl-4">
               {record.history
@@ -147,7 +157,7 @@ export const CaseDetailModal: React.FC<CaseDetailModalProps> = ({ record, onClos
                 ))}
             </div>
 
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex gap-2 no-print">
               <input
                 className="flex-1 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
                 placeholder="Añadir nota de seguimiento..."
@@ -158,6 +168,15 @@ export const CaseDetailModal: React.FC<CaseDetailModalProps> = ({ record, onClos
               <button onClick={handleAddNote} className="px-3 py-2 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold">
                 Añadir
               </button>
+            </div>
+          </div>
+
+          <div className="hidden print:grid grid-cols-2 gap-8 mt-10 pt-6">
+            <div className="text-center">
+              <div className="border-t border-slate-800 pt-1 text-xs">Firma del Coordinador Regional</div>
+            </div>
+            <div className="text-center">
+              <div className="border-t border-slate-800 pt-1 text-xs">Firma del Supervisor / Departamento de la Familia</div>
             </div>
           </div>
         </div>

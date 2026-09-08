@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useDb } from '../context/DbContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useRole } from '../context/RoleContext';
 import { answerLocalQuery, computeAutoFixPatch, runIntegrityAudit, summarizeAudit } from '../utils/integrityAgent';
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -16,6 +17,7 @@ interface ChatMsg {
 
 export const AgentPanel: React.FC = () => {
   const { t } = useLanguage();
+  const { permissions } = useRole();
   const { records, applyAutoFix } = useDb();
   const [chat, setChat] = useState<ChatMsg[]>([
     { role: 'agent', text: 'Hola, soy el Agente Especialista en Base de Datos. Puedo auditar la integridad clínica de los expedientes y responder preguntas sobre los datos registrados.' },
@@ -52,6 +54,14 @@ export const AgentPanel: React.FC = () => {
 
   const autoFixableCount = findings.filter((f) => f.autoFixable).length;
 
+  if (!permissions.usarAgente) {
+    return (
+      <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-6 text-center text-sm text-slate-500">
+        Tu rol actual no tiene acceso al Agente Especialista en Base de Datos. Contacta a un Supervisor, Director o Administrador.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -75,7 +85,7 @@ export const AgentPanel: React.FC = () => {
 
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">Hallazgos de la Auditoría</h3>
-        {autoFixableCount > 0 && (
+        {autoFixableCount > 0 && permissions.aplicarCorrecciones && (
           <button onClick={fixAll} className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">
             {t('agent_autofix')} ({autoFixableCount})
           </button>
@@ -96,7 +106,7 @@ export const AgentPanel: React.FC = () => {
                   <p className="font-semibold">{rec?.numeroRegistro ?? f.recordId}</p>
                   <p>{f.message}</p>
                 </div>
-                {f.autoFixable && (
+                {f.autoFixable && permissions.aplicarCorrecciones && (
                   <button
                     onClick={() => fixOne(f.id)}
                     className="shrink-0 px-2.5 py-1 rounded-md bg-white dark:bg-slate-900 border border-current text-xs font-semibold"

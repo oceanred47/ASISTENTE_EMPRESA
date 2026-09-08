@@ -52,6 +52,7 @@ function sanitizeRecord(input: Partial<TeaRecord>): TeaRecord {
     tiempoRespuesta: input.tiempoRespuesta,
     barreras: input.barreras ?? [],
     observaciones: input.observaciones,
+    subcomiteAdultos: input.subcomiteAdultos,
     createdAt: input.createdAt ?? new Date().toISOString(),
     updatedAt: input.updatedAt ?? new Date().toISOString(),
     history: input.history ?? [],

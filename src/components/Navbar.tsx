@@ -1,23 +1,31 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useRole } from '../context/RoleContext';
+import { ROLES, TeaRecord } from '../types';
+import { NotificationCenter } from './NotificationCenter';
 
-export type TabKey = 'records' | 'analytics' | 'agent' | 'importExport';
+export type TabKey = 'records' | 'analytics' | 'agent' | 'importExport' | 'committees';
 
 interface NavbarProps {
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
   alertCount: number;
+  inactiveCount: number;
+  records: TeaRecord[];
+  onOpenCase: (record: TeaRecord) => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, alertCount }) => {
+export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, alertCount, inactiveCount, records, onOpenCase }) => {
   const { t, lang, toggleLang } = useLanguage();
   const { theme, toggleTheme } = useTheme();
+  const { role, setRole } = useRole();
 
-  const tabs: { key: TabKey; label: string }[] = [
-    { key: 'records', label: t('nav_records') },
+  const tabs: { key: TabKey; label: string; badge?: number }[] = [
+    { key: 'records', label: t('nav_records'), badge: inactiveCount },
     { key: 'analytics', label: t('nav_analytics') },
-    { key: 'agent', label: t('nav_agent') },
+    { key: 'committees', label: 'Comités Ley 163' },
+    { key: 'agent', label: t('nav_agent'), badge: alertCount },
     { key: 'importExport', label: t('nav_importExport') },
   ];
 
@@ -30,6 +38,19 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, alertCou
             <p className="text-xs sm:text-sm text-blue-200 leading-snug">{t('appSubtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as typeof role)}
+              className="px-2 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm font-semibold transition border-none focus:outline-none focus:ring-2 focus:ring-white/40"
+              aria-label="rol activo"
+            >
+              {ROLES.map((r) => (
+                <option key={r} value={r} className="text-slate-900">
+                  {r}
+                </option>
+              ))}
+            </select>
+            <NotificationCenter records={records} onOpenCase={onOpenCase} />
             <button
               onClick={toggleLang}
               className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm font-semibold transition"
@@ -60,9 +81,9 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, alertCou
               }`}
             >
               {tab.label}
-              {tab.key === 'agent' && alertCount > 0 && (
+              {!!tab.badge && tab.badge > 0 && (
                 <span className="ml-2 inline-flex items-center justify-center text-[10px] font-bold rounded-full bg-amber-500 text-white w-5 h-5">
-                  {alertCount}
+                  {tab.badge}
                 </span>
               )}
             </button>

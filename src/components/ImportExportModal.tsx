@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useDb } from '../context/DbContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useRole } from '../context/RoleContext';
 import { TeaRecord } from '../types';
 
 function downloadBlob(filename: string, content: string, mime: string) {
@@ -47,9 +48,18 @@ function recordsToCsv(records: TeaRecord[]): string {
 
 export const ImportExportModal: React.FC = () => {
   const { t } = useLanguage();
+  const { permissions } = useRole();
   const { records, importRecords, resetData } = useDb();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
+
+  if (!permissions.importarExportar) {
+    return (
+      <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-6 text-center text-sm text-slate-500">
+        Tu rol actual no tiene acceso a Importar/Exportar la base de datos. Contacta a un Supervisor, Director o Administrador.
+      </div>
+    );
+  }
 
   const exportJson = () => {
     downloadBlob(`registro_tea_ley163_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(records, null, 2), 'application/json');
@@ -113,15 +123,16 @@ export const ImportExportModal: React.FC = () => {
         <h3 className="font-semibold text-rose-700 dark:text-rose-400">Zona de Riesgo</h3>
         <p className="text-sm text-slate-500">Restablece la base de datos a los expedientes de ejemplo iniciales. Esta acción no se puede deshacer.</p>
         <button
+          disabled={!permissions.reiniciarBaseDatos}
           onClick={() => {
             if (confirm('¿Confirma que desea restablecer la base de datos a sus datos de ejemplo iniciales?')) {
               resetData();
               setStatus('Base de datos restablecida.');
             }
           }}
-          className="px-3 py-2 rounded-md border border-rose-400 text-rose-700 dark:text-rose-400 text-sm font-semibold"
+          className="px-3 py-2 rounded-md border border-rose-400 text-rose-700 dark:text-rose-400 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Restablecer Base de Datos
+          Restablecer Base de Datos{!permissions.reiniciarBaseDatos && ' (solo Administrador)'}
         </button>
       </div>
     </div>

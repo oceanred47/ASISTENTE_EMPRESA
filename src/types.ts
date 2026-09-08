@@ -181,6 +181,9 @@ export interface TeaRecord {
   // Observaciones
   observaciones?: string;
 
+  // Comité Ley 163-2024 (Art. 10 / Art. 20)
+  subcomiteAdultos?: string;
+
   // Metadatos
   createdAt: string;
   updatedAt: string;
@@ -188,6 +191,77 @@ export interface TeaRecord {
 }
 
 export type TeaRecordInput = Omit<TeaRecord, 'id' | 'createdAt' | 'updatedAt' | 'history'>;
+
+// Roles del sistema (control de acceso)
+export const ROLES = ['Administrador', 'Director', 'Supervisor', 'Coordinador'] as const;
+export type Role = (typeof ROLES)[number];
+
+export interface RolePermissions {
+  crear: boolean;
+  editar: boolean;
+  eliminar: boolean;
+  verAnalitica: boolean;
+  usarAgente: boolean;
+  aplicarCorrecciones: boolean;
+  importarExportar: boolean;
+  reiniciarBaseDatos: boolean;
+}
+
+export const ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
+  Administrador: {
+    crear: true,
+    editar: true,
+    eliminar: true,
+    verAnalitica: true,
+    usarAgente: true,
+    aplicarCorrecciones: true,
+    importarExportar: true,
+    reiniciarBaseDatos: true,
+  },
+  Director: {
+    crear: true,
+    editar: true,
+    eliminar: true,
+    verAnalitica: true,
+    usarAgente: true,
+    aplicarCorrecciones: true,
+    importarExportar: true,
+    reiniciarBaseDatos: false,
+  },
+  Supervisor: {
+    crear: true,
+    editar: true,
+    eliminar: false,
+    verAnalitica: true,
+    usarAgente: true,
+    aplicarCorrecciones: true,
+    importarExportar: true,
+    reiniciarBaseDatos: false,
+  },
+  Coordinador: {
+    crear: true,
+    editar: true,
+    eliminar: false,
+    verAnalitica: true,
+    usarAgente: false,
+    aplicarCorrecciones: false,
+    importarExportar: false,
+    reiniciarBaseDatos: false,
+  },
+};
+
+// Comités Interinstitucionales Ley 163-2024
+export const SUBCOMITES_ADULTOS = [
+  'Orientación y Sensibilización',
+  'Seguimiento y Evaluación de Servicios',
+  'Intercesión Legal y Protección',
+  'Apoderamiento e Inclusión Comunitaria',
+  'Programas de Respiro Familiar',
+  'Cuidado Prolongado Especializado',
+  'Ama de Llaves',
+  'Apoyo Psicológico y Salud Mental',
+  'Programas de Cuido Diurno y Vida Independiente',
+] as const;
 
 export interface IntegrityFinding {
   id: string;

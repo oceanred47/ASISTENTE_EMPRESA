@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { TeaRecord, REGIONES } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { useRole } from '../context/RoleContext';
 import { formatDate, isAdult } from '../utils/teaHelpers';
+import { daysSinceLastActivity, inactivityLevel as inactivityLevelOf, INACTIVE_THRESHOLD_DAYS } from '../utils/inactivityHelper';
 
 interface CaseListProps {
   records: TeaRecord[];
@@ -23,11 +25,15 @@ const PAGE_SIZE = 10;
 
 export const CaseList: React.FC<CaseListProps> = ({ records, onView, onEdit, onDelete, onNew }) => {
   const { t } = useLanguage();
+  const { permissions } = useRole();
   const [search, setSearch] = useState('');
   const [regionFilter, setRegionFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [adultFilter, setAdultFilter] = useState<'' | 'adult' | 'minor'>('');
+  const [inactivityFilter, setInactivityFilter] = useState<'' | 'warning' | 'critical'>('');
   const [page, setPage] = useState(1);
+
+  const inactiveTotal = useMemo(() => records.filter((r) => inactivityLevelOf(r) !== 'ok').length, [records]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -42,9 +48,10 @@ export const CaseList: React.FC<CaseListProps> = ({ records, onView, onEdit, onD
       if (statusFilter && r.estadoSeguimiento !== statusFilter) return false;
       if (adultFilter === 'adult' && !isAdult(r.edad)) return false;
       if (adultFilter === 'minor' && isAdult(r.edad)) return false;
+      if (inactivityFilter && inactivityLevelOf(r) !== inactivityFilter) return false;
       return true;
     });
-  }, [records, search, regionFilter, statusFilter, adultFilter]);
+  }, [records, search, regionFilter, statusFilter, adultFilter, inactivityFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRecords = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -54,19 +61,31 @@ export const CaseList: React.FC<CaseListProps> = ({ records, onView, onEdit, onD
     setRegionFilter('');
     setStatusFilter('');
     setAdultFilter('');
+    setInactivityFilter('');
     setPage(1);
   };
 
-  const hasFilters = search || regionFilter || statusFilter || adultFilter;
+  const hasFilters = search || regionFilter || statusFilter || adultFilter || inactivityFilter;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold">{t('nav_records')}</h2>
-        <button onClick={onNew} className="px-4 py-2 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold">
-          + {t('btn_newCase')}
-        </button>
+        {permissions.crear && (
+          <button onClick={onNew} className="px-4 py-2 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold">
+            + {t('btn_newCase')}
+          </button>
+        )}
       </div>
+
+      {inactiveTotal > 0 && (
+        <button
+          onClick={() => setInactivityFilter(inactivityFilter ? '' : 'warning')}
+          className="w-full text-left border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300"
+        >
+          ⚠️ {inactiveTotal} expediente(s) sin actualizaciones en {INACTIVE_THRESHOLD_DAYS}+ días. Haz clic para {inactivityFilter ? 'quitar el filtro' : 'filtrar'}.
+        </button>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <input
@@ -120,6 +139,18 @@ export const CaseList: React.FC<CaseListProps> = ({ records, onView, onEdit, onD
           <option value="adult">Adultos (18+)</option>
           <option value="minor">Menores</option>
         </select>
+        <select
+          className="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+          value={inactivityFilter}
+          onChange={(e) => {
+            setInactivityFilter(e.target.value as typeof inactivityFilter);
+            setPage(1);
+          }}
+        >
+          <option value="">Inactividad: {t('filter_all')}</option>
+          <option value="warning">⚠️ Inactivos (30+ días)</option>
+          <option value="critical">🚨 Críticos (60+ días)</option>
+        </select>
         {hasFilters && (
           <button onClick={resetFilters} className="px-3 py-2 rounded-md border border-slate-300 dark:border-slate-700 text-sm">
             {t('filter_reset')}
@@ -159,17 +190,28 @@ export const CaseList: React.FC<CaseListProps> = ({ records, onView, onEdit, onD
                       {r.estadoSeguimiento}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-slate-500">{formatDate(r.updatedAt)}</td>
+                  <td className="px-3 py-2 text-slate-500">
+                    {formatDate(r.updatedAt)}
+                    {inactivityLevelOf(r) !== 'ok' && (
+                      <span className={`block text-xs ${inactivityLevelOf(r) === 'critical' ? 'text-rose-600' : 'text-amber-600'}`}>
+                        {inactivityLevelOf(r) === 'critical' ? '🚨' : '⚠️'} {daysSinceLastActivity(r)}d sin actividad
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right space-x-2 whitespace-nowrap">
                     <button onClick={() => onView(r)} className="text-blue-700 dark:text-blue-400 hover:underline">
                       {t('btn_view')}
                     </button>
-                    <button onClick={() => onEdit(r)} className="text-slate-600 dark:text-slate-300 hover:underline">
-                      {t('btn_edit')}
-                    </button>
-                    <button onClick={() => onDelete(r)} className="text-rose-600 hover:underline">
-                      {t('btn_delete')}
-                    </button>
+                    {permissions.editar && (
+                      <button onClick={() => onEdit(r)} className="text-slate-600 dark:text-slate-300 hover:underline">
+                        {t('btn_edit')}
+                      </button>
+                    )}
+                    {permissions.eliminar && (
+                      <button onClick={() => onDelete(r)} className="text-rose-600 hover:underline">
+                        {t('btn_delete')}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

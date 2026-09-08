@@ -22,6 +22,10 @@ html.dark {
     left: 0;
     top: 0;
     width: 100%;
+    max-height: none !important;
+    overflow: visible !important;
+    color: #000 !important;
+    background: #fff !important;
   }
   .no-print {
     display: none !important;
