@@ -1,0 +1,74 @@
+import React from 'react';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
+
+export type TabKey = 'records' | 'analytics' | 'agent' | 'importExport';
+
+interface NavbarProps {
+  activeTab: TabKey;
+  onTabChange: (tab: TabKey) => void;
+  alertCount: number;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, alertCount }) => {
+  const { t, lang, toggleLang } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
+
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: 'records', label: t('nav_records') },
+    { key: 'analytics', label: t('nav_analytics') },
+    { key: 'agent', label: t('nav_agent') },
+    { key: 'importExport', label: t('nav_importExport') },
+  ];
+
+  return (
+    <header className="sticky top-0 z-30 no-print">
+      <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-950 text-white px-4 py-3">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-lg sm:text-xl font-bold leading-snug">{t('appTitle')}</h1>
+            <p className="text-xs sm:text-sm text-blue-200 leading-snug">{t('appSubtitle')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleLang}
+              className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm font-semibold transition"
+              aria-label="toggle language"
+            >
+              {lang === 'es' ? 'EN' : 'ES'}
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm font-semibold transition"
+              aria-label="toggle theme"
+            >
+              {theme === 'light' ? t('theme_dark') : t('theme_light')}
+            </button>
+          </div>
+        </div>
+      </div>
+      <nav className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4">
+        <div className="max-w-7xl mx-auto flex gap-1 overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => onTabChange(tab.key)}
+              className={`relative px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition ${
+                activeTab === tab.key
+                  ? 'border-blue-700 text-blue-700 dark:text-blue-400 dark:border-blue-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              {tab.label}
+              {tab.key === 'agent' && alertCount > 0 && (
+                <span className="ml-2 inline-flex items-center justify-center text-[10px] font-bold rounded-full bg-amber-500 text-white w-5 h-5">
+                  {alertCount}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </nav>
+    </header>
+  );
+};
