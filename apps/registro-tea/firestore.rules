@@ -1,0 +1,66 @@
+rules_version = '2';
+
+// Reglas de seguridad de Firestore — Registro TEA · Ley 163-2024
+//
+// Reflejan del lado del servidor la misma matriz de permisos definida en
+// src/types.ts (ROLE_PERMISSIONS). Las restricciones que el cliente aplica en
+// la interfaz (ocultar botones) son solo de usabilidad; estas reglas son la
+// verdadera barrera de seguridad, ya que cualquier cliente autenticado podría
+// llamar al SDK de Firestore directamente sin pasar por la interfaz.
+//
+// Para publicarlas: Firebase Console → Firestore Database → Reglas → pega este
+// archivo → Publicar. (O con Firebase CLI: `firebase deploy --only firestore:rules`.)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && myRole() == 'Administrador';
+    }
+
+    // crear / editar: todos los roles autenticados (Administrador, Director,
+    // Supervisor, Coordinador) pueden crear y editar expedientes.
+    function canEditRecords() {
+      return isSignedIn() && myRole() in ['Administrador', 'Director', 'Supervisor', 'Coordinador'];
+    }
+
+    // eliminar: solo Administrador y Director (Supervisor y Coordinador no).
+    function canDeleteRecords() {
+      return isSignedIn() && myRole() in ['Administrador', 'Director'];
+    }
+
+    match /tea_records/{recordId} {
+      allow read: if isSignedIn();
+      allow create, update: if canEditRecords();
+      allow delete: if canDeleteRecords();
+    }
+
+    match /users/{userId} {
+      // Cualquier usuario autenticado puede ver la lista de usuarios (necesario
+      // para el panel de Gestión de Usuarios y para mostrar nombres/roles).
+      allow read: if isSignedIn();
+
+      // Un usuario nuevo puede crear su propio perfil, siempre con rol inicial
+      // "Coordinador" — nadie se autoasigna un rol superior al registrarse.
+      allow create: if isSignedIn() && request.auth.uid == userId && request.resource.data.role == 'Coordinador';
+
+      // Un usuario puede actualizar su propio perfil mientras NO cambie su rol
+      // (por ejemplo, su nombre para mostrar). Cambiar el rol de cualquier
+      // usuario (propio o ajeno) requiere ser Administrador.
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (request.auth.uid == userId && request.resource.data.role == resource.data.role)
+      );
+
+      allow delete: if isAdmin();
+    }
+  }
+}
